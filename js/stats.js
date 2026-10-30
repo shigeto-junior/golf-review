@@ -57,6 +57,12 @@ export function computeStats(rounds) {
 
   return {
     holeCount: holes.length,
+    girHit: girHoles.filter((x) => x.gir).length,
+    girTotal: girHoles.length,
+    fwHit: teeHoles.filter((h) => h.fairway === "hit").length,
+    fwTotal: teeHoles.length,
+    totalPutts: withPutts.reduce((s, h) => s + h.putts, 0),
+    missedGreenCount: missedGreens.length,
     girRate: rate(girHoles.filter((x) => x.gir).length, girHoles.length),
     fwRate: rate(teeHoles.filter((h) => h.fairway === "hit").length, teeHoles.length),
     fwMiss,
