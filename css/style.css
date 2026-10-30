@@ -177,3 +177,24 @@ textarea.field-input { min-height: 0; font-size: 16px; font-weight: 500; padding
 .viewer { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; overflow: auto; }
 .viewer img { max-width: 100%; max-height: 100%; }
 .viewer .ib { position: fixed; top: calc(var(--safe-top) + 12px); right: 12px; }
+
+/* ---- 地図 ---- */
+.map-btn { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 2px solid var(--line); background: var(--surf); font-size: 15px; font-weight: 800; }
+.map-screen { position: relative; max-width: none; }
+.map { position: absolute; inset: 0; background: #1d2b22; }
+.map-top { position: absolute; top: 0; left: 0; right: 0; z-index: 500; display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-top) + 12px) 12px 12px; background: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0)); color: #fff; }
+.map-top .ib { color: var(--ink); }
+.map-title { flex: 1; display: flex; align-items: baseline; gap: 8px; }
+.map-title b { font-size: 22px; font-weight: 800; }
+.map-title span { font-size: 14px; font-weight: 800; color: #F2C230; }
+.map-dist { text-align: right; background: var(--surf); color: var(--ink); border-radius: 14px; padding: 6px 12px; }
+.map-dist small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); }
+.map-dist b { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.map-panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 500; background: var(--surf); border-top: 2px solid var(--line); border-radius: 22px 22px 0 0; padding: 14px 16px calc(var(--safe-bottom) + 14px); display: flex; flex-direction: column; gap: 10px; }
+.map-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; color: var(--sub); }
+.map-row b { font-size: 28px; font-weight: 800; color: var(--ink); }
+.map-hint { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.6; }
+.map-search { display: flex; gap: 8px; }
+.map-search .field-input { min-height: 48px; font-size: 16px; }
+.map-search .o { flex: none; width: 72px; }
+.map-attr { margin: 0; font-size: 10px; color: var(--sub); }
