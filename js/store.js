@@ -52,8 +52,13 @@ export function saveCourseMemo(memo) {
 }
 
 // バックアップ用。機種変更やデータ消失に備えて JSON で書き出し／読み込みする。
-export function exportJson() {
-  return JSON.stringify({ app: "golf-review", version: 1, exportedAt: new Date().toISOString(), ...state }, null, 2);
+export function allImageIds() {
+  return Object.values(state.courseMemos).flatMap((m) => (m.holeImages ?? []).flat());
+}
+
+// images: 画像ID → data URL（images.exportImages の結果）
+export function exportJson(images = {}) {
+  return JSON.stringify({ app: "golf-review", version: 1, exportedAt: new Date().toISOString(), ...state, images }, null, 2);
 }
 
 // merge: true なら今のデータを残したまま、まだ無いラウンドとコースメモだけを追加する。

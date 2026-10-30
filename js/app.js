@@ -1,9 +1,16 @@
 import {
-  createRound, createCourseMemo, roundTotal, isGreenInRegulation, DEFAULT_PARS,
+  createRound, createCourseMemo, roundTotal, isGreenInRegulation, holeImageIds, holeGreen, DEFAULT_PARS,
   TEE_CLUBS, FAIRWAY_RESULTS, APPROACH_MISSES, FIRST_PUTT_DISTANCES,
 } from "./model.js";
 import * as store from "./store.js";
+import * as images from "./images.js";
+import { loadLeaflet, createSatelliteMap, yards, watchLocation, searchPlace, TILE_ATTRIBUTION } from "./map.js";
+
+// 画面を離れるときに止める処理（位置情報の監視など）
+let cleanup = null;
+let lastLocation = null;
 import { computeStats, pct, num } from "./stats.js";
+import { suggestPractice } from "./practice.js";
 
 const app = document.getElementById("app");
 
@@ -39,6 +46,7 @@ const ICON = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   plus: "M12 5v14M5 12h14",
   pin: "M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z",
+  map: "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
   down: "M12 4v11M7 10l5 5 5-5M5 20h14",
   up: "M12 16V5M7 10l5-5 5 5M5 20h14",
 };
@@ -62,6 +70,23 @@ function tabbar(active) {
 
 function backButton(href, label) {
   return `<a href="${href}" class="ib" aria-label="${label}">${icon(ICON.back)}</a>`;
+}
+
+// 画像は IndexedDB から非同期で読むので、data-img 属性を付けた <img> にあとから src を入れる
+function fillImages(root = app) {
+  root.querySelectorAll("img[data-img]").forEach(async (img) => {
+    const url = await images.imageUrl(img.dataset.img);
+    if (url) img.src = url;
+  });
+}
+
+function showImage(id) {
+  const overlay = document.createElement("div");
+  overlay.className = "viewer";
+  overlay.innerHTML = `<img data-img="${esc(id)}" alt="ホール図"><button type="button" class="ib" aria-label="閉じる">${icon("M6 6l12 12M18 6L6 18")}</button>`;
+  overlay.querySelector("button").addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
+  fillImages(overlay);
 }
 
 function courseNames() {
@@ -213,6 +238,7 @@ function renderHole(id, numberStr) {
 
   const memo = store.getCourseMemo(round.courseName);
   const holeMemo = memo?.holes?.[n - 1];
+  const green = holeGreen(memo, n - 1);
   const t = roundTotal(round);
   const gir = isGreenInRegulation(hole);
   const scoreOptions = [-1, 0, 1, 2, 3].map((d) => hole.par + d);
@@ -236,10 +262,13 @@ function renderHole(id, numberStr) {
         <div class="hole-no">
           <div style="display:flex;align-items:baseline;gap:6px"><span class="k">HOLE</span><span class="n">${n}</span></div>
           <span class="pill acc" style="font-size:16px;padding:6px 14px">PAR ${hole.par}</span>
+          <a href="#/round/${id}/hole/${n}/map" class="map-btn" aria-label="地図と距離">${icon(ICON.map, 20, 2.2)}<span id="green-dist">${green ? "…y" : "地図"}</span></a>
         </div>
         <a class="ib" href="#/round/${id}/hole/${n + 1}" aria-label="次のホール"${last ? ' aria-disabled="true"' : ""}>${icon(ICON.next)}</a>
       </div>
       ${holeMemo ? `<div class="hole-memo">${icon(ICON.pin, 18, 2.2)}<span>${esc(holeMemo)}</span></div>` : ""}
+      ${holeImageIds(memo, n - 1).length ? `<div class="thumbs">${holeImageIds(memo, n - 1).map((imgId) => `
+        <button type="button" class="thumb" data-view="${esc(imgId)}" aria-label="ホール図を大きく表示"><img data-img="${esc(imgId)}" alt=""></button>`).join("")}</div>` : ""}
     </header>
 
     <div class="body" style="padding-top:8px;gap:18px" id="hole-body">
@@ -286,6 +315,24 @@ function renderHole(id, numberStr) {
         : `<a href="#/round/${id}/hole/${n + 1}" class="cta">次のホールへ${icon(ICON.arrow)}</a>`}
     </div>
   </div>`;
+
+  fillImages();
+  app.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => showImage(b.dataset.view)));
+
+  // グリーン位置を登録済みなら、現在地からの残り距離を表示し続ける
+  if (green && !cleanup) {
+    const showDist = (loc) => {
+      const el = document.getElementById("green-dist");
+      if (el) el.textContent = `${yards(loc, green)}y`;
+    };
+    if (lastLocation) showDist(lastLocation);
+    cleanup = watchLocation((loc) => { lastLocation = loc; showDist(loc); }, () => {
+      const el = document.getElementById("green-dist");
+      if (el) el.textContent = "地図";
+    });
+  } else if (green && lastLocation) {
+    document.getElementById("green-dist").textContent = `${yards(lastLocation, green)}y`;
+  }
 
   const body = app.querySelector("#hole-body");
   const update = (fn) => {
@@ -336,6 +383,115 @@ function renderHole(id, numberStr) {
     const target = dx < 0 ? n + 1 : n - 1;
     if (target >= 1 && target <= round.holes.length) location.hash = `#/round/${id}/hole/${target}`;
   });
+}
+
+// ---- 地図と距離 ----
+
+async function renderHoleMap(id, numberStr) {
+  const round = store.getRound(id);
+  if (!round) return notFound();
+  const n = Number(numberStr);
+  const hole = round.holes[n - 1];
+  if (!hole) return notFound();
+  const memo = store.getCourseMemo(round.courseName) ?? createCourseMemo(round.courseName, round.holes.length);
+  if (!memo.holeGreens) memo.holeGreens = memo.holes.map(() => null);
+  let green = holeGreen(memo, n - 1);
+  let tapped = null;
+
+  app.innerHTML = `<div class="screen map-screen">
+    <div id="map" class="map"></div>
+    <header class="map-top">
+      ${backButton(`#/round/${id}/hole/${n}`, "ホール入力へ戻る")}
+      <div class="map-title"><b>HOLE ${n}</b><span>PAR ${hole.par}</span></div>
+      <div class="map-dist"><small>グリーンまで</small><b id="dist-green">${green ? "…" : "未登録"}</b></div>
+    </header>
+    <div class="map-panel"><div id="panel" style="display:flex;flex-direction:column;gap:10px"></div><p class="map-attr">${TILE_ATTRIBUTION}</p></div>
+  </div>`;
+
+  const panel = app.querySelector("#panel");
+  const drawPanel = () => {
+    const here = lastLocation;
+    if (tapped) {
+      panel.innerHTML = `
+        <div class="map-row"><span>${here ? "現在地からタップした地点まで" : "現在地がまだわかりません"}</span><b>${here ? `${yards(here, tapped)}y` : "—"}</b></div>
+        ${green ? `<div class="map-row"><span>タップした地点からグリーンまで</span><b>${yards(tapped, green)}y</b></div>` : ""}
+        <div class="grid2">
+          <button type="button" class="o" data-act="clear">消す</button>
+          <button type="button" class="o on" data-act="set-green">${green ? "ここをグリーンにし直す" : "ここをグリーンに登録"}</button>
+        </div>`;
+    } else {
+      panel.innerHTML = `
+        <p class="map-hint">${green
+          ? "地図をタップすると、その地点までの距離を測れます。"
+          : "グリーンの真ん中をタップして「グリーンに登録」すると、次からはホールを開くだけで残り距離が出ます。"}</p>
+        ${!here && !green ? `<form id="search" class="map-search"><input class="field-input" name="q" placeholder="コース名で地図を移動" value="${esc(round.courseName)}"><button class="o on" type="submit">探す</button></form>` : ""}`;
+    }
+    panel.querySelector('[data-act="clear"]')?.addEventListener("click", () => { tapped = null; redraw(); });
+    panel.querySelector('[data-act="set-green"]')?.addEventListener("click", () => {
+      green = { lat: tapped.lat, lng: tapped.lng };
+      memo.holeGreens[n - 1] = green;
+      store.saveCourseMemo(memo);
+      tapped = null;
+      redraw();
+    });
+    panel.querySelector("#search")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = new FormData(e.target).get("q").trim();
+      if (!q) return;
+      try {
+        const results = await searchPlace(q);
+        if (!results.length) return alert("見つかりませんでした。別の名前で試してください");
+        map.setView([results[0].lat, results[0].lng], 16);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  };
+
+  let L;
+  try {
+    L = await loadLeaflet();
+  } catch (err) {
+    panel.innerHTML = `<p class="map-hint">${esc(err.message)}</p>`;
+    return;
+  }
+  if (!document.getElementById("map")) return; // 読み込み中に別の画面へ移った
+
+  // 最初に映す場所: グリーン → 現在地 → 同じコースの他のホールのグリーン → 日本全体
+  const otherGreen = memo.holeGreens.find(Boolean);
+  const start = green ?? lastLocation ?? otherGreen;
+  const map = createSatelliteMap(L, document.getElementById("map"), start ? [start.lat, start.lng] : [36.2, 138.25], start ? 17 : 5);
+
+  const greenMarker = L.circleMarker([0, 0], { radius: 9, color: "#12301F", weight: 3, fillColor: "#F2C230", fillOpacity: 1 });
+  const meMarker = L.circleMarker([0, 0], { radius: 8, color: "#ffffff", weight: 3, fillColor: "#2F6FD6", fillOpacity: 1 });
+  const tapMarker = L.circleMarker([0, 0], { radius: 8, color: "#12301F", weight: 3, fillColor: "#ffffff", fillOpacity: 1 });
+  const line = L.polyline([], { color: "#ffffff", weight: 3, dashArray: "6 6" });
+  const lineToGreen = L.polyline([], { color: "#F2C230", weight: 3, dashArray: "6 6" });
+
+  const redraw = () => {
+    const here = lastLocation;
+    if (green) greenMarker.setLatLng([green.lat, green.lng]).addTo(map); else greenMarker.remove();
+    if (here) meMarker.setLatLng([here.lat, here.lng]).addTo(map); else meMarker.remove();
+    if (tapped) tapMarker.setLatLng([tapped.lat, tapped.lng]).addTo(map); else tapMarker.remove();
+    if (tapped && here) line.setLatLngs([[here.lat, here.lng], [tapped.lat, tapped.lng]]).addTo(map); else line.remove();
+    if (tapped && green) lineToGreen.setLatLngs([[tapped.lat, tapped.lng], [green.lat, green.lng]]).addTo(map); else lineToGreen.remove();
+    app.querySelector("#dist-green").textContent = green ? (here ? `${yards(here, green)}y` : "現在地待ち") : "未登録";
+    drawPanel();
+  };
+
+  map.on("click", (e) => { tapped = { lat: e.latlng.lat, lng: e.latlng.lng }; redraw(); });
+
+  let centered = Boolean(green);
+  if (cleanup) cleanup();
+  cleanup = watchLocation((loc) => {
+    lastLocation = loc;
+    if (!centered) {
+      map.setView([loc.lat, loc.lng], 17);
+      centered = true;
+    }
+    redraw();
+  }, () => redraw());
+  redraw();
 }
 
 // ---- ラウンドのまとめ ----
@@ -532,7 +688,8 @@ function renderStats() {
         <p class="note">左右がわかるミス${lr}回のうち 左${fm.left}回 ／ 右${fm.right}回${fm.unknown ? `（The Grint から取り込んだ方向不明のミス ${fm.unknown}回は除く）` : ""}</p></section>` : ""}
       ${amTotal ? `<section class="card"><p class="lb">グリーンを外した方向</p>${bars(amRows, highestIndex(amRows))}
         <p class="note">方向を記録した${amTotal}ホールの内訳</p></section>` : ""}
-      <p class="note" style="text-align:center">${rangeLabel}の集計です。練習メニューの提案はこのあと追加します。</p>`}
+      <a href="#/practice" class="cta">練習メニューを見る${icon(ICON.arrow)}</a>
+      <p class="note" style="text-align:center">${rangeLabel}の集計です。</p>`}
     </div>
     ${tabbar(2)}
   </div>`;
@@ -541,6 +698,48 @@ function renderStats() {
     statsRange = Number(b.dataset.range);
     renderStats();
   }));
+}
+
+// ---- 練習メニュー提案 ----
+
+function renderPractice() {
+  const all = store.getRounds().filter((r) => roundTotal(r).played > 0);
+  const rounds = statsRange ? all.slice(0, statsRange) : all;
+  const st = computeStats(rounds);
+  const cards = suggestPractice(st);
+  const rangeLabel = statsRange ? `直近${statsRange}ラウンド` : "全ラウンド";
+
+  app.innerHTML = `<div class="screen">
+    <header class="top back">${backButton("#/stats", "スタッツへ戻る")}
+      <div style="flex:1;min-width:0"><h1 style="font-size:24px">練習メニュー提案</h1>
+        <span class="meta">${rangeLabel}から見えた弱点${cards.length ? `トップ${cards.length}` : ""}</span></div>
+    </header>
+    <div class="body" style="gap:16px;padding-top:4px">
+      ${!st.holeCount ? `<p class="empty">まだデータがありません。<br>ラウンドを記録すると、弱点と練習メニューを提案します。</p>`
+      : !cards.length ? `<p class="empty">目立った弱点は見つかりませんでした。<br>記録するラウンドが増えると、もっと細かく提案できます。</p>`
+      : cards.map((c, i) => `
+        <section class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="pill acc" style="flex:none;width:44px;height:44px;border-radius:22px;padding:0;font-size:22px;display:flex;align-items:center;justify-content:center">${i + 1}</span>
+            <h2 style="margin:0;font-size:18px;font-weight:800;line-height:1.3">${esc(c.title)}</h2>
+          </div>
+          <div style="background:var(--chip);border-radius:14px;padding:12px 14px">
+            <div style="font-size:26px;font-weight:800;line-height:1.2">${esc(c.stat)}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--sub);margin-top:2px">${esc(c.evidence)}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">${c.drills.map((d) => `
+            <div style="border:2px solid var(--line);border-radius:14px;padding:12px 14px">
+              <div style="font-size:15px;font-weight:800;line-height:1.4">${esc(d.t)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--sub);margin-top:4px;line-height:1.5">${esc(d.d)}</div>
+              <div class="pill" style="margin-top:8px;background:var(--sel);color:var(--selink);font-size:12px">${esc(d.m)}</div>
+            </div>`).join("")}
+          </div>
+          <div style="font-size:14px;font-weight:700">次のラウンドの目標：${esc(c.goal)}</div>
+        </section>`).join("")}
+      <p class="note" style="text-align:center">スタッツ画面で集計期間を変えると、提案も変わります。</p>
+    </div>
+    ${tabbar(2)}
+  </div>`;
 }
 
 // ---- コースメモ ----
@@ -601,12 +800,21 @@ function renderMemo(courseName) {
             <div class="card" style="padding:10px">
               <label class="lb" for="hole-memo">${i + 1}番${pars ? ` ・ PAR ${pars[i]}` : ""}</label>
               <textarea id="hole-memo" rows="3" class="field-input" placeholder="例: 右OB。ティーショットはUTで左サイドへ">${esc(text)}</textarea>
+              <p class="lb" style="margin-top:10px">ホール図・写真</p>
+              <div class="thumbs">
+                ${holeImageIds(memo, i).map((imgId) => `<div class="thumb">
+                  <button type="button" data-view="${esc(imgId)}" aria-label="大きく表示"><img data-img="${esc(imgId)}" alt=""></button>
+                  <button type="button" class="del" data-del="${esc(imgId)}" aria-label="この画像を削除">×</button></div>`).join("")}
+                <label class="thumb add">${icon(ICON.plus, 22, 2.6)}<span>追加</span><input type="file" accept="image/*" id="add-image" hidden multiple></label>
+              </div>
+              <p class="note">コースガイドのホール図や、スクリーンショットを貼っておくと、ラウンド中のホール入力画面に表示されます。</p>
               <button type="button" class="o on" style="width:100%;margin-top:8px" data-close>完了</button>
             </div>` : `
             <button type="button" class="hr" data-hole="${i}">
               <span class="no">${i + 1}</span>
               ${pars ? `<span class="par">PAR ${pars[i]}</span>` : ""}
               <span class="txt${text ? "" : " none"}">${text ? esc(text) : "メモを追加"}</span>
+              ${holeImageIds(memo, i).length ? `<span class="pill">図 ${holeImageIds(memo, i).length}</span>` : ""}
             </button>`).join("")}
         </div>
       </section>
@@ -626,6 +834,28 @@ function renderMemo(courseName) {
     app.querySelector(".body").scrollTop = y;
   };
   app.querySelectorAll("[data-hole]").forEach((b) => b.addEventListener("click", () => { editingHole = Number(b.dataset.hole); reopen(); }));
+  fillImages();
+  app.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => showImage(b.dataset.view)));
+  app.querySelector("#add-image")?.addEventListener("change", async (e) => {
+    const files = [...e.target.files];
+    if (!memo.holeImages) memo.holeImages = memo.holes.map(() => []);
+    for (const file of files) {
+      try {
+        memo.holeImages[editingHole].push(await images.addImage(file));
+      } catch (err) {
+        alert(`画像を保存できませんでした: ${err.message}`);
+      }
+    }
+    save();
+    reopen();
+  });
+  app.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("この画像を削除しますか？")) return;
+    memo.holeImages[editingHole] = memo.holeImages[editingHole].filter((x) => x !== b.dataset.del);
+    save();
+    await images.deleteImage(b.dataset.del);
+    reopen();
+  }));
   app.querySelector("[data-close]")?.addEventListener("click", () => { editingHole = null; reopen(); });
 }
 
@@ -661,7 +891,7 @@ function renderSettings() {
   </div>`;
 
   app.querySelector("#export").addEventListener("click", async () => {
-    const json = store.exportJson();
+    const json = store.exportJson(await images.exportImages(store.allImageIds()));
     const file = new File([json], `golf-review-${today()}.json`, { type: "application/json" });
     const markExported = () => {
       const d = new Date();
@@ -691,7 +921,9 @@ function renderSettings() {
     if (!file) return;
     if (!merge && !confirm("今のデータをすべてバックアップの内容で置き換えます。よろしいですか？")) return;
     try {
-      const count = store.importJson(await file.text(), { merge });
+      const text = await file.text();
+      await images.importImages(JSON.parse(text).images);
+      const count = store.importJson(text, { merge });
       alert(merge ? `${count}ラウンドを追加しました` : "読み込みました");
       location.hash = "#/";
     } catch (err) {
@@ -712,11 +944,13 @@ function notFound() {
 const routes = [
   [/^#?\/?$/, renderRounds],
   [/^#\/round\/new$/, renderNewRound],
+  [/^#\/round\/([\w-]+)\/hole\/(\d+)\/map$/, renderHoleMap],
   [/^#\/round\/([\w-]+)\/hole\/(\d+)$/, renderHole],
   [/^#\/round\/([\w-]+)$/, renderRound],
   [/^#\/memos$/, renderMemos],
   [/^#\/memo\/(.+)$/, (name) => renderMemo(decodeURIComponent(name))],
   [/^#\/stats$/, renderStats],
+  [/^#\/practice$/, renderPractice],
   [/^#\/settings$/, renderSettings],
 ];
 
@@ -725,6 +959,10 @@ let lastHash = null;
 function route() {
   const hash = location.hash || "#/";
   if (hash !== lastHash) {
+    if (cleanup) {
+      cleanup();
+      cleanup = null;
+    }
     editingHole = null;
     memoOpen = false;
   }
