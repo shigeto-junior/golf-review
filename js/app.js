@@ -1,8 +1,9 @@
 import {
-  createRound, createCourseMemo, roundTotal, isGreenInRegulation, DEFAULT_PARS,
+  createRound, createCourseMemo, roundTotal, isGreenInRegulation, holeImageIds, DEFAULT_PARS,
   TEE_CLUBS, FAIRWAY_RESULTS, APPROACH_MISSES, FIRST_PUTT_DISTANCES,
 } from "./model.js";
 import * as store from "./store.js";
+import * as images from "./images.js";
 import { computeStats, pct, num } from "./stats.js";
 
 const app = document.getElementById("app");
@@ -62,6 +63,23 @@ function tabbar(active) {
 
 function backButton(href, label) {
   return `<a href="${href}" class="ib" aria-label="${label}">${icon(ICON.back)}</a>`;
+}
+
+// 画像は IndexedDB から非同期で読むので、data-img 属性を付けた <img> にあとから src を入れる
+function fillImages(root = app) {
+  root.querySelectorAll("img[data-img]").forEach(async (img) => {
+    const url = await images.imageUrl(img.dataset.img);
+    if (url) img.src = url;
+  });
+}
+
+function showImage(id) {
+  const overlay = document.createElement("div");
+  overlay.className = "viewer";
+  overlay.innerHTML = `<img data-img="${esc(id)}" alt="ホール図"><button type="button" class="ib" aria-label="閉じる">${icon("M6 6l12 12M18 6L6 18")}</button>`;
+  overlay.querySelector("button").addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
+  fillImages(overlay);
 }
 
 function courseNames() {
@@ -240,6 +258,8 @@ function renderHole(id, numberStr) {
         <a class="ib" href="#/round/${id}/hole/${n + 1}" aria-label="次のホール"${last ? ' aria-disabled="true"' : ""}>${icon(ICON.next)}</a>
       </div>
       ${holeMemo ? `<div class="hole-memo">${icon(ICON.pin, 18, 2.2)}<span>${esc(holeMemo)}</span></div>` : ""}
+      ${holeImageIds(memo, n - 1).length ? `<div class="thumbs">${holeImageIds(memo, n - 1).map((imgId) => `
+        <button type="button" class="thumb" data-view="${esc(imgId)}" aria-label="ホール図を大きく表示"><img data-img="${esc(imgId)}" alt=""></button>`).join("")}</div>` : ""}
     </header>
 
     <div class="body" style="padding-top:8px;gap:18px" id="hole-body">
@@ -286,6 +306,9 @@ function renderHole(id, numberStr) {
         : `<a href="#/round/${id}/hole/${n + 1}" class="cta">次のホールへ${icon(ICON.arrow)}</a>`}
     </div>
   </div>`;
+
+  fillImages();
+  app.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => showImage(b.dataset.view)));
 
   const body = app.querySelector("#hole-body");
   const update = (fn) => {
@@ -601,12 +624,21 @@ function renderMemo(courseName) {
             <div class="card" style="padding:10px">
               <label class="lb" for="hole-memo">${i + 1}番${pars ? ` ・ PAR ${pars[i]}` : ""}</label>
               <textarea id="hole-memo" rows="3" class="field-input" placeholder="例: 右OB。ティーショットはUTで左サイドへ">${esc(text)}</textarea>
+              <p class="lb" style="margin-top:10px">ホール図・写真</p>
+              <div class="thumbs">
+                ${holeImageIds(memo, i).map((imgId) => `<div class="thumb">
+                  <button type="button" data-view="${esc(imgId)}" aria-label="大きく表示"><img data-img="${esc(imgId)}" alt=""></button>
+                  <button type="button" class="del" data-del="${esc(imgId)}" aria-label="この画像を削除">×</button></div>`).join("")}
+                <label class="thumb add">${icon(ICON.plus, 22, 2.6)}<span>追加</span><input type="file" accept="image/*" id="add-image" hidden multiple></label>
+              </div>
+              <p class="note">コースガイドのホール図や、スクリーンショットを貼っておくと、ラウンド中のホール入力画面に表示されます。</p>
               <button type="button" class="o on" style="width:100%;margin-top:8px" data-close>完了</button>
             </div>` : `
             <button type="button" class="hr" data-hole="${i}">
               <span class="no">${i + 1}</span>
               ${pars ? `<span class="par">PAR ${pars[i]}</span>` : ""}
               <span class="txt${text ? "" : " none"}">${text ? esc(text) : "メモを追加"}</span>
+              ${holeImageIds(memo, i).length ? `<span class="pill">図 ${holeImageIds(memo, i).length}</span>` : ""}
             </button>`).join("")}
         </div>
       </section>
@@ -626,6 +658,28 @@ function renderMemo(courseName) {
     app.querySelector(".body").scrollTop = y;
   };
   app.querySelectorAll("[data-hole]").forEach((b) => b.addEventListener("click", () => { editingHole = Number(b.dataset.hole); reopen(); }));
+  fillImages();
+  app.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => showImage(b.dataset.view)));
+  app.querySelector("#add-image")?.addEventListener("change", async (e) => {
+    const files = [...e.target.files];
+    if (!memo.holeImages) memo.holeImages = memo.holes.map(() => []);
+    for (const file of files) {
+      try {
+        memo.holeImages[editingHole].push(await images.addImage(file));
+      } catch (err) {
+        alert(`画像を保存できませんでした: ${err.message}`);
+      }
+    }
+    save();
+    reopen();
+  });
+  app.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("この画像を削除しますか？")) return;
+    memo.holeImages[editingHole] = memo.holeImages[editingHole].filter((x) => x !== b.dataset.del);
+    save();
+    await images.deleteImage(b.dataset.del);
+    reopen();
+  }));
   app.querySelector("[data-close]")?.addEventListener("click", () => { editingHole = null; reopen(); });
 }
 
@@ -661,7 +715,7 @@ function renderSettings() {
   </div>`;
 
   app.querySelector("#export").addEventListener("click", async () => {
-    const json = store.exportJson();
+    const json = store.exportJson(await images.exportImages(store.allImageIds()));
     const file = new File([json], `golf-review-${today()}.json`, { type: "application/json" });
     const markExported = () => {
       const d = new Date();
@@ -691,7 +745,9 @@ function renderSettings() {
     if (!file) return;
     if (!merge && !confirm("今のデータをすべてバックアップの内容で置き換えます。よろしいですか？")) return;
     try {
-      const count = store.importJson(await file.text(), { merge });
+      const text = await file.text();
+      await images.importImages(JSON.parse(text).images);
+      const count = store.importJson(text, { merge });
       alert(merge ? `${count}ラウンドを追加しました` : "読み込みました");
       location.hash = "#/";
     } catch (err) {

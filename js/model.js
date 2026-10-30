@@ -81,6 +81,11 @@ export function createCourseMemo(courseName, holeCount = 18) {
     courseName,
     general: "",
     holes: Array.from({ length: holeCount }, () => ""),
+    holeImages: Array.from({ length: holeCount }, () => []), // 画像ID（images.js）の配列
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function holeImageIds(memo, index) {
+  return memo?.holeImages?.[index] ?? [];
 }
