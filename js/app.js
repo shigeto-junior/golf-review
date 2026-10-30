@@ -10,6 +10,7 @@ import { loadLeaflet, createSatelliteMap, yards, watchLocation, searchPlace, TIL
 let cleanup = null;
 let lastLocation = null;
 import { computeStats, pct, num } from "./stats.js";
+import { suggestPractice } from "./practice.js";
 
 const app = document.getElementById("app");
 
@@ -687,7 +688,8 @@ function renderStats() {
         <p class="note">左右がわかるミス${lr}回のうち 左${fm.left}回 ／ 右${fm.right}回${fm.unknown ? `（The Grint から取り込んだ方向不明のミス ${fm.unknown}回は除く）` : ""}</p></section>` : ""}
       ${amTotal ? `<section class="card"><p class="lb">グリーンを外した方向</p>${bars(amRows, highestIndex(amRows))}
         <p class="note">方向を記録した${amTotal}ホールの内訳</p></section>` : ""}
-      <p class="note" style="text-align:center">${rangeLabel}の集計です。練習メニューの提案はこのあと追加します。</p>`}
+      <a href="#/practice" class="cta">練習メニューを見る${icon(ICON.arrow)}</a>
+      <p class="note" style="text-align:center">${rangeLabel}の集計です。</p>`}
     </div>
     ${tabbar(2)}
   </div>`;
@@ -696,6 +698,48 @@ function renderStats() {
     statsRange = Number(b.dataset.range);
     renderStats();
   }));
+}
+
+// ---- 練習メニュー提案 ----
+
+function renderPractice() {
+  const all = store.getRounds().filter((r) => roundTotal(r).played > 0);
+  const rounds = statsRange ? all.slice(0, statsRange) : all;
+  const st = computeStats(rounds);
+  const cards = suggestPractice(st);
+  const rangeLabel = statsRange ? `直近${statsRange}ラウンド` : "全ラウンド";
+
+  app.innerHTML = `<div class="screen">
+    <header class="top back">${backButton("#/stats", "スタッツへ戻る")}
+      <div style="flex:1;min-width:0"><h1 style="font-size:24px">練習メニュー提案</h1>
+        <span class="meta">${rangeLabel}から見えた弱点${cards.length ? `トップ${cards.length}` : ""}</span></div>
+    </header>
+    <div class="body" style="gap:16px;padding-top:4px">
+      ${!st.holeCount ? `<p class="empty">まだデータがありません。<br>ラウンドを記録すると、弱点と練習メニューを提案します。</p>`
+      : !cards.length ? `<p class="empty">目立った弱点は見つかりませんでした。<br>記録するラウンドが増えると、もっと細かく提案できます。</p>`
+      : cards.map((c, i) => `
+        <section class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="pill acc" style="flex:none;width:44px;height:44px;border-radius:22px;padding:0;font-size:22px;display:flex;align-items:center;justify-content:center">${i + 1}</span>
+            <h2 style="margin:0;font-size:18px;font-weight:800;line-height:1.3">${esc(c.title)}</h2>
+          </div>
+          <div style="background:var(--chip);border-radius:14px;padding:12px 14px">
+            <div style="font-size:26px;font-weight:800;line-height:1.2">${esc(c.stat)}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--sub);margin-top:2px">${esc(c.evidence)}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">${c.drills.map((d) => `
+            <div style="border:2px solid var(--line);border-radius:14px;padding:12px 14px">
+              <div style="font-size:15px;font-weight:800;line-height:1.4">${esc(d.t)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--sub);margin-top:4px;line-height:1.5">${esc(d.d)}</div>
+              <div class="pill" style="margin-top:8px;background:var(--sel);color:var(--selink);font-size:12px">${esc(d.m)}</div>
+            </div>`).join("")}
+          </div>
+          <div style="font-size:14px;font-weight:700">次のラウンドの目標：${esc(c.goal)}</div>
+        </section>`).join("")}
+      <p class="note" style="text-align:center">スタッツ画面で集計期間を変えると、提案も変わります。</p>
+    </div>
+    ${tabbar(2)}
+  </div>`;
 }
 
 // ---- コースメモ ----
@@ -906,6 +950,7 @@ const routes = [
   [/^#\/memos$/, renderMemos],
   [/^#\/memo\/(.+)$/, (name) => renderMemo(decodeURIComponent(name))],
   [/^#\/stats$/, renderStats],
+  [/^#\/practice$/, renderPractice],
   [/^#\/settings$/, renderSettings],
 ];
 

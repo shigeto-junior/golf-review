@@ -1,7 +1,7 @@
 // オフライン対応用の Service Worker。
 // アプリのファイルをキャッシュし、電波が弱いコース上でも起動できるようにする。
 // ファイルを更新したら CACHE_VERSION を上げること。
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `golf-review-${CACHE_VERSION}`;
 
 const APP_FILES = [
@@ -15,6 +15,7 @@ const APP_FILES = [
   "./js/stats.js",
   "./js/images.js",
   "./js/map.js",
+  "./js/practice.js",
   "./vendor/leaflet/leaflet.js",
   "./vendor/leaflet/leaflet.css",
   "./icons/icon-192.png",
