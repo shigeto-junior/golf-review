@@ -1,0 +1,160 @@
+:root {
+  --green: #1f5e3b;
+  --green-light: #3f8f5a;
+  --bg: #f4f1e8;
+  --card: #ffffff;
+  --text: #1d2420;
+  --muted: #6b746f;
+  --border: #e2ddd0;
+  --danger: #b23b3b;
+  --tabbar-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121714;
+    --card: #1c231f;
+    --text: #e8ece9;
+    --muted: #98a29c;
+    --border: #2c352f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--green);
+  color: #fff;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+}
+.app-header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+
+.view {
+  padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+.tabbar a {
+  flex: 1;
+  height: var(--tabbar-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 20px;
+}
+.tabbar a span { font-size: 11px; }
+.tabbar a.active { color: var(--green-light); font-weight: 600; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.card h2 { font-size: 16px; margin: 0 0 8px; }
+.card p { margin: 0 0 12px; line-height: 1.6; color: var(--muted); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.danger { color: var(--danger); margin-top: 24px; }
+.btn.block { display: flex; width: 100%; margin-bottom: 12px; }
+
+.list { list-style: none; margin: 0 0 12px; padding: 0; }
+.list li {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.list li > a, .list li:not(:has(a)) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+.list small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.list .score { text-align: right; font-weight: 700; font-size: 18px; }
+.holes li { padding: 0; }
+
+.form label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+.form input[type="text"], .form input[type="date"], .form textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+}
+.form.inline { display: flex; gap: 8px; }
+.form.inline input { flex: 1; margin: 0; padding: 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.form fieldset { border: none; padding: 0; margin: 0 0 16px; }
+.form legend { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+
+.par-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.par-grid button {
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+.par-grid button small { display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+
+.summary { text-align: center; }
+.summary .big { font-size: 36px; font-weight: 700; }
+.summary .big small { font-size: 18px; color: var(--muted); }
+
+.empty { text-align: center; color: var(--muted); line-height: 1.8; margin: 40px 0; }
+.notice { font-size: 13px; color: var(--muted); text-align: center; }
