@@ -158,3 +158,90 @@ html, body {
 
 .empty { text-align: center; color: var(--muted); line-height: 1.8; margin: 40px 0; }
 .notice { font-size: 13px; color: var(--muted); text-align: center; }
+
+/* ---- ホール入力画面 ---- */
+body.focus .tabbar { display: none; }
+body.focus .view { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+
+.hole-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
+.hole-no b { font-size: 44px; line-height: 1; }
+.hole-no small { font-size: 16px; margin-right: 8px; }
+.hole-no span { font-size: 18px; font-weight: 600; color: var(--green-light); }
+.hole-total { text-align: right; }
+.hole-total small { display: block; font-size: 12px; color: var(--muted); }
+.hole-total b { font-size: 18px; }
+.hole-memo { background: var(--card); border-left: 4px solid #e9b949; border-radius: 6px; padding: 8px 10px; margin: 0 0 12px; font-size: 14px; }
+
+.field { margin-bottom: 16px; }
+.field h3, .field summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+.field textarea { width: 100%; margin-top: 6px; padding: 10px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font-family: inherit; }
+
+.num-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 6px; }
+.num {
+  min-height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0;
+}
+.num small { font-size: 9px; font-weight: 400; color: var(--muted); }
+.num.on, .chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+.num.on small { color: #d9e8de; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.chip {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.inline-fields { display: flex; gap: 24px; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 22px; }
+.stepper b { font-size: 22px; min-width: 20px; text-align: center; }
+
+.hole-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--border);
+}
+.hole-nav .btn { min-height: 56px; font-size: 17px; }
+.hole-nav [aria-disabled="true"] { opacity: 0.3; pointer-events: none; }
+
+/* ---- スコアカード ---- */
+.scroll-x { overflow-x: auto; }
+.scorecard { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 8px; text-align: center; }
+.scorecard th, .scorecard td { padding: 6px 2px; border-bottom: 1px solid var(--border); min-width: 24px; }
+.scorecard th:first-child, .scorecard td:first-child { text-align: left; color: var(--muted); white-space: nowrap; padding-right: 6px; }
+.scorecard a { color: inherit; text-decoration: none; display: block; }
+.scorecard .birdie a, .scorecard .eagle a { color: #c0392b; font-weight: 700; }
+.scorecard .bogey a { color: #2f6db5; }
+.scorecard .double a { color: #2f6db5; font-weight: 700; }
+
+/* ---- スタッツ ---- */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 10px 6px; text-align: center; }
+.stat small { display: block; font-size: 11px; color: var(--muted); }
+.stat b { font-size: 20px; }
+.stat-line { font-size: 14px; margin: 4px 0; color: var(--text) !important; }
+
+.segmented { display: flex; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+.segmented button { flex: 1; min-height: 40px; border: none; border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; font-weight: 600; }
+.segmented button.on { background: var(--green); color: #fff; }
+
+.score-row { grid-template-columns: repeat(8, 1fr); }
+.trend { display: flex; align-items: flex-end; gap: 4px; height: 140px; overflow-x: auto; }
+.trend a { flex: 0 0 24px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; text-decoration: none; color: var(--muted); }
+.trend span { width: 100%; background: var(--green-light); border-radius: 4px 4px 0 0; }
+.trend small { font-size: 10px; margin-top: 2px; text-align: center; }
+.trend i { display: block; font-style: normal; font-size: 8px; }

@@ -40,7 +40,7 @@ export function createHole(number, par) {
     score: null,
     putts: null,
     teeClub: null,
-    fairway: null, // FAIRWAY_RESULTS の value。パー3は null のまま
+    fairway: null, // FAIRWAY_RESULTS の value。パー3は null のまま。The Grint から取り込んだ分は "miss"（方向不明）もある
     approachMiss: null, // パーオンしなかったときだけ。APPROACH_MISSES の value
     firstPutt: null, // FIRST_PUTT_DISTANCES の value
     penalties: 0,

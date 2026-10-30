@@ -56,11 +56,24 @@ export function exportJson() {
   return JSON.stringify({ app: "golf-review", version: 1, exportedAt: new Date().toISOString(), ...state }, null, 2);
 }
 
-export function importJson(text) {
+// merge: true なら今のデータを残したまま、まだ無いラウンドとコースメモだけを追加する。
+// 戻り値は追加（または置き換え）したラウンド数。
+export function importJson(text, { merge = true } = {}) {
   const data = JSON.parse(text);
   if (!Array.isArray(data.rounds) || typeof data.courseMemos !== "object") {
     throw new Error("Golf Review のバックアップファイルではないようです");
   }
-  state = { rounds: data.rounds, courseMemos: data.courseMemos };
+  if (!merge) {
+    state = { rounds: data.rounds, courseMemos: data.courseMemos };
+    save();
+    return data.rounds.length;
+  }
+  const ids = new Set(state.rounds.map((r) => r.id));
+  const added = data.rounds.filter((r) => !ids.has(r.id));
+  state.rounds.push(...added);
+  for (const [name, memo] of Object.entries(data.courseMemos)) {
+    if (!state.courseMemos[name]) state.courseMemos[name] = memo;
+  }
   save();
+  return added.length;
 }
