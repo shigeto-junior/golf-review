@@ -49,13 +49,14 @@ export function createHole(number, par) {
   };
 }
 
-export function createRound({ date, courseName, tee = "", pars = DEFAULT_PARS }) {
+// yards: 登録コースのティー別ヤード（js/courses.js）。わからなければ null
+export function createRound({ date, courseName, tee = "", pars = DEFAULT_PARS, yards = null }) {
   return {
     id: newId(),
     date,
     courseName,
     tee,
-    holes: pars.map((par, i) => createHole(i + 1, par)),
+    holes: pars.map((par, i) => ({ ...createHole(i + 1, par), yards: yards?.[i] ?? null })),
     note: "",
     createdAt: new Date().toISOString(),
   };
