@@ -11,6 +11,7 @@ let cleanup = null;
 let lastLocation = null;
 import { computeStats, pct, num } from "./stats.js";
 import { suggestPractice } from "./practice.js";
+import { COURSES, findCourse } from "./courses.js";
 
 const app = document.getElementById("app");
 
@@ -141,41 +142,69 @@ function renderRounds() {
 // ---- 新しいラウンド ----
 
 const TEES = [["ブラック", "#1A1A1A"], ["ブルー", "#2F6FD6"], ["ホワイト", "#FFFFFF"], ["レッド", "#D0432E"]];
+// 登録コースのティー名（英語）に付ける色
+const TEE_COLORS = { Black: "#1A1A1A", Blue: "#2F6FD6", White: "#FFFFFF", Red: "#D0432E", Gold: "#D4A72C", Silver: "#B8BCC2", Green: "#2E8B57", Regular: "#FFFFFF", Back: "#1A1A1A", Front: "#D0432E" };
 
 function renderNewRound() {
-  const names = courseNames().slice(0, 5);
-  const form = { date: today(), course: names[0] ?? null, newCourse: "", tee: "ホワイト", pars: null };
-  const parsFor = (course) => {
-    const last = store.getRounds().find((r) => r.courseName === course && r.holes.length === 18);
-    return last ? last.holes.map((h) => h.par) : [...DEFAULT_PARS];
+  // 選べるコース: 最近回ったコース → 登録コース → それ以外の過去のコース
+  const played = courseNames();
+  const all = [...new Set([...played.slice(0, 3), ...COURSES.map((c) => c.name), ...played])];
+  const form = { date: today(), course: all[0] ?? null, newCourse: "", tee: "", pars: null, filter: "" };
+
+  const teeOptions = (course) => {
+    const reg = findCourse(course);
+    if (reg && Object.keys(reg.tees).length) return Object.keys(reg.tees).map((t) => [t, TEE_COLORS[t] ?? "#FFFFFF"]);
+    return TEES;
   };
-  form.pars = form.course ? parsFor(form.course) : [...DEFAULT_PARS];
+  const choose = (course) => {
+    form.course = course;
+    const reg = course && findCourse(course);
+    if (reg) {
+      form.pars = [...reg.pars];
+    } else {
+      const last = course && store.getRounds().find((r) => r.courseName === course && r.holes.length === 18);
+      form.pars = last ? last.holes.map((h) => h.par) : [...DEFAULT_PARS];
+    }
+    // 前回そのコースで使ったティーを選んでおく
+    const lastTee = course && store.getRounds().find((r) => r.courseName === course)?.tee;
+    const opts = teeOptions(course).map(([t]) => t);
+    form.tee = opts.includes(lastTee) ? lastTee : opts.includes("ホワイト") ? "ホワイト" : opts.includes("White") ? "White" : opts[0];
+  };
+  choose(form.course);
 
   const draw = () => {
     const isNew = form.course === null;
+    const reg = !isNew && findCourse(form.course);
+    const yards = reg?.tees?.[form.tee] ?? null;
+    const q = form.filter.trim().toLowerCase();
+    const shown = q ? all.filter((n) => n.toLowerCase().includes(q)) : all.slice(0, 8);
+    if (form.course && !shown.includes(form.course)) shown.unshift(form.course);
+    const holeCount = form.pars.length;
     app.innerHTML = `<div class="screen">
       <header class="top back">${backButton("#/", "キャンセルして一覧へ戻る")}<h1 style="font-size:24px">新しいラウンド</h1></header>
       <div class="body" style="gap:18px;padding-top:8px">
         <section><label class="lb" for="date">日付</label>
           <input id="date" type="date" class="field-input" value="${form.date}"></section>
-        <section><p class="lb">コース${names.length ? "（過去のコースから選択）" : ""}</p>
+        <section><p class="lb">コース</p>
+          ${all.length > 8 ? `<input id="filter" class="field-input" style="margin-bottom:8px;min-height:48px;font-size:16px" placeholder="コース名でしぼりこむ（${all.length}コース）" value="${esc(form.filter)}">` : ""}
           <div class="grid2">
-            ${names.map((n) => `<button type="button" class="o clamp${form.course === n ? " on" : ""}" data-course="${esc(n)}">${esc(n)}</button>`).join("")}
+            ${shown.map((n) => `<button type="button" class="o clamp${form.course === n ? " on" : ""}" data-course="${esc(n)}">${esc(n)}</button>`).join("")}
             <button type="button" class="o${isNew ? " on" : ""}" data-course="">＋ 新しいコース</button>
           </div>
           ${isNew ? `<input id="new-course" class="field-input" style="margin-top:8px" placeholder="コース名" value="${esc(form.newCourse)}">` : ""}
+          ${reg ? `<p class="note">登録済みのコースです。パー${yards ? "とヤード" : ""}を自動で入れました。</p>` : ""}
         </section>
         <section><p class="lb">ティー</p>
-          <div class="grid4">${TEES.map(([label, dot]) => `
-            <button type="button" class="o${form.tee === label ? " on" : ""}" style="gap:4px;font-size:13px" data-tee="${label}">
-              <span style="width:14px;height:14px;border-radius:7px;border:2px solid var(--ink);background:${dot}"></span>${label}</button>`).join("")}
+          <div class="grid4">${teeOptions(form.course).map(([label, dot]) => `
+            <button type="button" class="o${form.tee === label ? " on" : ""}" style="gap:4px;font-size:13px" data-tee="${esc(label)}">
+              <span style="width:14px;height:14px;border-radius:7px;border:2px solid var(--ink);background:${dot}"></span>${esc(label)}</button>`).join("")}
           </div></section>
-        <section><p class="lb">18ホールのパー（タップで 3 → 4 → 5）</p>
+        <section><p class="lb">${holeCount}ホールのパー${yards ? "とヤード" : ""}（タップで 3 → 4 → 5）</p>
           <div class="grid6">${form.pars.map((p, i) => `
             <button type="button" class="o${p === 3 ? " p3" : p === 5 ? " on" : ""}" style="min-height:62px;padding:0" data-i="${i}" aria-label="${i + 1}番 パー${p}（タップで変更）">
-              <span style="font-size:11px;font-weight:700">${i + 1}</span><span style="font-size:26px;font-weight:800;line-height:1.1">${p}</span></button>`).join("")}
+              <span style="font-size:11px;font-weight:700">${i + 1}</span><span style="font-size:26px;font-weight:800;line-height:1.1">${p}</span>${yards?.[i] ? `<span style="font-size:10px;font-weight:700">${yards[i]}y</span>` : ""}</button>`).join("")}
           </div>
-          <p style="margin:10px 0 0;font-size:14px;font-weight:700;text-align:center">OUT ${form.pars.slice(0, 9).reduce((a, b) => a + b, 0)} ・ IN ${form.pars.slice(9).reduce((a, b) => a + b, 0)} ・ 合計 ${form.pars.reduce((a, b) => a + b, 0)}</p>
+          <p style="margin:10px 0 0;font-size:14px;font-weight:700;text-align:center">${holeCount > 9 ? `OUT ${form.pars.slice(0, 9).reduce((a, b) => a + b, 0)} ・ IN ${form.pars.slice(9).reduce((a, b) => a + b, 0)} ・ ` : ""}合計 ${form.pars.reduce((a, b) => a + b, 0)}${yards ? ` ・ ${yards.reduce((a, b) => a + (b || 0), 0)}y` : ""}</p>
         </section>
       </div>
       <div class="foot sheet"><button type="button" class="cta" id="start">ラウンドを開始${icon(ICON.arrow)}</button></div>
@@ -183,14 +212,21 @@ function renderNewRound() {
 
     app.querySelector("#date").addEventListener("change", (e) => { form.date = e.target.value; });
     app.querySelector("#new-course")?.addEventListener("input", (e) => { form.newCourse = e.target.value; });
+    app.querySelector("#filter")?.addEventListener("input", (e) => {
+      form.filter = e.target.value;
+      const pos = e.target.selectionStart;
+      draw();
+      const f = app.querySelector("#filter");
+      f.focus();
+      f.setSelectionRange(pos, pos);
+    });
     app.querySelectorAll("[data-course]").forEach((b) => b.addEventListener("click", () => {
-      form.course = b.dataset.course || null;
-      form.pars = form.course ? parsFor(form.course) : [...DEFAULT_PARS];
+      choose(b.dataset.course || null);
       draw();
       if (!form.course) app.querySelector("#new-course").focus();
     }));
     app.querySelectorAll("[data-tee]").forEach((b) => b.addEventListener("click", () => {
-      form.tee = form.tee === b.dataset.tee ? "" : b.dataset.tee;
+      form.tee = b.dataset.tee;
       draw();
     }));
     app.querySelectorAll("[data-i]").forEach((b) => b.addEventListener("click", () => {
@@ -206,7 +242,7 @@ function renderNewRound() {
         alert("コース名を入力してください");
         return;
       }
-      const round = createRound({ date: form.date || today(), courseName, tee: form.tee, pars: form.pars });
+      const round = createRound({ date: form.date || today(), courseName, tee: form.tee, pars: form.pars, yards });
       store.saveRound(round);
       location.hash = `#/round/${round.id}/hole/1`;
     });
@@ -261,8 +297,8 @@ function renderHole(id, numberStr) {
         <a class="ib" href="#/round/${id}/hole/${n - 1}" aria-label="前のホール"${n === 1 ? ' aria-disabled="true"' : ""}>${icon(ICON.back)}</a>
         <div class="hole-no">
           <div style="display:flex;align-items:baseline;gap:6px"><span class="k">HOLE</span><span class="n">${n}</span></div>
-          <span class="pill acc" style="font-size:16px;padding:6px 14px">PAR ${hole.par}</span>
-          <a href="#/round/${id}/hole/${n}/map" class="map-btn" aria-label="地図と距離">${icon(ICON.map, 20, 2.2)}<span id="green-dist">${green ? "…y" : "地図"}</span></a>
+          <span class="pill acc" style="font-size:16px;padding:6px 14px">PAR ${hole.par}${hole.yards ? `<small style="font-size:12px;margin-left:6px">${hole.yards}y</small>` : ""}</span>
+          <a href="#/round/${id}/hole/${n}/map" class="map-btn" aria-label="地図と距離">${icon(ICON.map, 20, 2.2)}${green ? `<span id="green-dist">…y</span>` : ""}</a>
         </div>
         <a class="ib" href="#/round/${id}/hole/${n + 1}" aria-label="次のホール"${last ? ' aria-disabled="true"' : ""}>${icon(ICON.next)}</a>
       </div>
@@ -328,7 +364,7 @@ function renderHole(id, numberStr) {
     if (lastLocation) showDist(lastLocation);
     cleanup = watchLocation((loc) => { lastLocation = loc; showDist(loc); }, () => {
       const el = document.getElementById("green-dist");
-      if (el) el.textContent = "地図";
+      if (el) el.textContent = "—";
     });
   } else if (green && lastLocation) {
     document.getElementById("green-dist").textContent = `${yards(lastLocation, green)}y`;
@@ -511,6 +547,7 @@ function scorecardBlock(round, from, label) {
   const link = (h, inner) => `<a href="#/round/${round.id}/hole/${h.number}" class="cell ${inner.cls}">${inner.v}</a>`;
   return `<div class="card" style="padding:8px 12px">
     <div class="sc-row rh"><span class="h">HOLE</span>${cells((h) => link(h, { v: h.number, cls: "" }))}<span class="t">${label}</span></div>
+    ${holes.some((h) => h.yards) ? `<div class="sc-row rh"><span class="h">YARD</span>${cells((h) => `<span class="cell" style="font-size:10px">${h.yards ?? ""}</span>`)}<span class="t" style="font-size:11px">${sum(holes, "yards")}</span></div>` : ""}
     <div class="sc-row"><span class="h">PAR</span>${cells((h) => `<span class="cell">${h.par}</span>`)}<span class="t">${sum(holes, "par")}</span></div>
     <div class="sc-row rs"><span class="h">SCORE</span>${cells((h) => link(h, { v: h.score ?? "·", cls: scoreMark(h) }))}<span class="t">${sum(holes, "score") || "·"}</span></div>
     <div class="sc-row"><span class="h">PUTT</span>${cells((h) => `<span class="cell${h.putts >= 3 ? " kw" : ""}">${h.putts ?? "·"}</span>`)}<span class="t">${sum(holes, "putts") || "·"}</span></div>

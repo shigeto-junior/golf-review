@@ -116,7 +116,8 @@ textarea.field-input { min-height: 0; font-size: 16px; font-weight: 500; padding
 /* ---- ホール入力 ---- */
 .hole-top { flex: none; padding: calc(var(--safe-top) + 12px) 12px 8px; display: flex; flex-direction: column; gap: 6px; }
 .hole-top .row { display: flex; align-items: center; gap: 10px; }
-.hole-no { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.hole-no { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+.hole-no .pill, .map-btn { white-space: nowrap; }
 .hole-no .n { font-size: 52px; font-weight: 800; line-height: 1; }
 .hole-no .k { font-size: 13px; font-weight: 800; color: var(--sub); }
 .hole-memo { display: flex; align-items: center; gap: 8px; background: var(--chip); border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
